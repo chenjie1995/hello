@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::{Read, Write},
-    net::{TcpListener, TcpStream}, thread, time::Duration,
+    net::{TcpListener, TcpStream},
 };
 
 use hello::ThreadPool;
@@ -25,27 +25,38 @@ fn handle_connection(mut stream: TcpStream) {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
 
-    let get = b"GET / HTTP/1.1\r\n";
-    let sleep = b"GET /sleep HTTP/1.1\r\n";
+    let request_info = String::from_utf8_lossy(&buffer[..]);
+    let path = request_info
+        .lines()
+        .next()
+        .map(|e| get_request_path(e))
+        .unwrap_or_else(|| "/");
 
-    let (status_line, filename) = if buffer.starts_with(get) {
-        ("HTTP/1.1 200 OK", "hello.html")
-    } else if buffer.starts_with(sleep) {
-        thread::sleep(Duration::from_secs(5));
-        ("HTTP/1.1 200 OK", "hello.html")
+    let (status_line, filename) = if path == "/" {
+        ("HTTP/1.1 200 OK", "index.html")
     } else {
-        ("HTTP/1.1 404 NOT FOUND", "404.html")
+        ("HTTP/1.1 200 OK", path)
     };
 
-    let contents = fs::read_to_string(filename).unwrap();
+    let file_path = format!("./{}", filename);
+    println!("{}", file_path);
+    let contents = fs::read(file_path).unwrap();
 
     let response = format!(
-        "{}\r\nContent-Length: {}\r\n\r\n{}",
+        "{}\r\nContent-Length: {}\r\n\r\n",
         status_line,
-        contents.len(),
-        contents
+        contents.len()
     );
-
     stream.write(response.as_bytes()).unwrap();
+    stream.write_all(&contents[..]).unwrap();
     stream.flush().unwrap();
+}
+
+
+fn get_request_path(request_first_line: &str) -> &str {
+    let request_first_line_split: Vec<&str> = request_first_line.split_whitespace().collect();
+    
+    let path = request_first_line_split[1].trim_start_matches('/');
+
+    path
 }
