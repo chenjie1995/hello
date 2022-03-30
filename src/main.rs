@@ -8,7 +8,7 @@ use hello::ThreadPool;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-    let pool = ThreadPool::new(4);
+    let pool = ThreadPool::new(16);
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
@@ -26,21 +26,23 @@ fn handle_connection(mut stream: TcpStream) {
     stream.read(&mut buffer).unwrap();
 
     let request_info = String::from_utf8_lossy(&buffer[..]);
-    let path = request_info
+    let request_path = request_info
         .lines()
         .next()
         .map(|e| get_request_path(e))
-        .unwrap_or_else(|| "/");
+        .unwrap_or("/");
 
-    let (status_line, filename) = if path == "/" {
-        ("HTTP/1.1 200 OK", "index.html")
+    let file_path = format!(".{}", request_path);
+
+    let (status_line, file_path) = if request_path == "/" {
+        ("HTTP/1.1 200 OK", "./index.html")
+    } else if fs::metadata(&file_path).is_ok() {
+        ("HTTP/1.1 200 OK", file_path.as_str())
     } else {
-        ("HTTP/1.1 200 OK", path)
+        ("HTTP/1.1 404 NOT FOUND", "./404.html")
     };
 
-    let file_path = format!("./{}", filename);
-    println!("{}", file_path);
-    let contents = fs::read(file_path).unwrap();
+    let contents = fs::read(file_path).unwrap_or(vec![]);
 
     let response = format!(
         "{}\r\nContent-Length: {}\r\n\r\n",
@@ -56,7 +58,5 @@ fn handle_connection(mut stream: TcpStream) {
 fn get_request_path(request_first_line: &str) -> &str {
     let request_first_line_split: Vec<&str> = request_first_line.split_whitespace().collect();
     
-    let path = request_first_line_split[1].trim_start_matches('/');
-
-    path
+    request_first_line_split[1]
 }
