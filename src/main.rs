@@ -7,9 +7,15 @@ use std::{
 use hello::ThreadPool;
 
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let addr = "127.0.0.1:7878";
+    let listener = TcpListener::bind(addr).unwrap();
     let pool = ThreadPool::new(16);
 
+    let url = format!("http://{}", addr);
+    if open::that(url).is_ok() {
+        println!("{}", addr);
+    }
+    
     for stream in listener.incoming() {
         let stream = stream.unwrap();
 
@@ -22,7 +28,7 @@ fn main() {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    let mut buffer = [0; 1024];
+    let mut buffer = [0; 4096];
     stream.read(&mut buffer).unwrap();
 
     let request_info = String::from_utf8_lossy(&buffer[..]);
@@ -49,8 +55,9 @@ fn handle_connection(mut stream: TcpStream) {
         status_line,
         contents.len()
     );
+
     stream.write(response.as_bytes()).unwrap();
-    stream.write_all(&contents[..]).unwrap();
+    stream.write(contents.as_slice()).unwrap();
     stream.flush().unwrap();
 }
 
